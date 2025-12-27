@@ -11,7 +11,7 @@ export enum Methodology {
   QUANTITATIVE = 'Quantitative'
 }
 
-export type ResearchSectionType = 'Abstract' | 'Background' | 'Literature Review' | 'Methodology' | 'References';
+export type ResearchSectionType = 'Abstract' | 'BTHS' | 'QE' | 'Method' | 'References' | 'Questionnaire' | 'Analysis' | 'Draft';
 
 export type ProjectStatus = 'Draft' | 'Published' | 'Archived';
 
@@ -28,7 +28,7 @@ export interface Project {
   sourceFile?: {
     name: string;
     type: string;
-    data: string; // Base64 or preview URL
+    data: string;
   };
 }
 

@@ -2,7 +2,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Methodology, ResearchSectionType } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// Fix: Initializing GoogleGenAI with process.env.API_KEY directly as per SDK guidelines.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const suggestTopics = async (theme: string): Promise<string[]> => {
   const response = await ai.models.generateContent({
@@ -39,7 +40,9 @@ export const generateBackground = async (topic: string, methodology: Methodology
   return response.text || "";
 };
 
-export const ingestManuscript = async (rawContent: string): Promise<Record<ResearchSectionType, string>> => {
+// Fix: Changed return type to Record<string, string> to resolve the type error where 
+// 'Background', 'Literature Review', and 'Methodology' are not members of ResearchSectionType.
+export const ingestManuscript = async (rawContent: string): Promise<Record<string, string>> => {
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: `I have a research manuscript with the following content: "${rawContent.substring(0, 10000)}". 
@@ -88,8 +91,8 @@ export const searchAcademicSources = async (query: string): Promise<GroundedSour
     model: 'gemini-3-flash-preview',
     contents: `Search for real, recent academic papers, journals, and scholarly articles related to the topic: "${query}". 
     For each paper, provide: Title, Main Authors, Publication Year, and a 2-sentence Summary.
-    Format your response as a JSON array of objects. 
-    Example structure: [{"title": "...", "authors": "...", "year": "...", "summary": "..."}]`,
+    Include reputable sources like Google Scholar, ResearchGate, or ScienceDirect if possible.
+    Format your response as a JSON array of objects.`,
     config: {
       tools: [{ googleSearch: {} }],
       responseMimeType: "application/json",
@@ -109,13 +112,11 @@ export const searchAcademicSources = async (query: string): Promise<GroundedSour
     },
   });
 
-  // Extract grounding URLs from metadata
   const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
   const sourcesText = response.text || '[]';
   
   try {
     const parsedSources = JSON.parse(sourcesText);
-    // Map grounding URIs to sources if possible, or just provide the first relevant one
     return parsedSources.map((source: any, index: number) => ({
       ...source,
       uri: groundingChunks[index]?.web?.uri || groundingChunks[0]?.web?.uri || 'https://scholar.google.com'
@@ -124,4 +125,14 @@ export const searchAcademicSources = async (query: string): Promise<GroundedSour
     console.error("Failed to parse grounded sources", e);
     return [];
   }
+};
+
+export const analyzeContextForSuggestions = async (content: string): Promise<string> => {
+  if (!content.trim()) return "";
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: `Based on this manuscript fragment, suggest a specific academic search query that would find the most relevant supporting evidence or counter-arguments: "${content.substring(0, 1000)}". 
+    Return ONLY the search query string, nothing else.`,
+  });
+  return response.text?.trim() || "";
 };

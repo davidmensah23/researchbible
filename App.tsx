@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { AppStep, Project, CitationStyle, Methodology, ResearchSectionType, Paper } from './types';
 import Landing from './components/Landing';
 import Config from './components/Config';
@@ -9,14 +9,23 @@ import Dashboard from './components/Dashboard';
 import NewProjectModal from './components/NewProjectModal';
 import { ingestManuscript } from './services/geminiService';
 
+const STORAGE_KEY = 'scholarflow_projects';
+
 const App: React.FC = () => {
   const [step, setStep] = useState<AppStep>(AppStep.LANDING);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<Project[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved ? JSON.parse(saved) : [];
+  });
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   
   const [pendingConfig, setPendingConfig] = useState<{style: CitationStyle, meth: Methodology} | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+  }, [projects]);
 
   const currentProject = useMemo(() => 
     projects.find(p => p.id === currentProjectId) || null
@@ -33,28 +42,29 @@ const App: React.FC = () => {
   const handleUpload = useCallback(async (file: File) => {
     setIsUploading(true);
     try {
-      // In a real app, we'd use a PDF parser here. For this MVP, we simulate reading text.
-      // We'll use the file name as the title and process placeholder text with Gemini.
       const reader = new FileReader();
       reader.onload = async (e) => {
-        const text = (e.target?.result as string) || "Sample manuscript content...";
+        const text = (e.target?.result as string) || "";
         const sections = await ingestManuscript(text);
         
         const newProject: Project = {
           id: Math.random().toString(36).substr(2, 9),
           title: file.name.replace(/\.[^/.]+$/, ""),
-          theme: "Uploaded manuscript",
+          theme: "Uploaded: " + file.name,
           citationStyle: CitationStyle.APA,
           methodology: Methodology.QUALITATIVE,
-          sections: sections,
+          sections: {
+            ...sections,
+            'BTHS': sections['Background'] || '',
+            'QE': '',
+            'Method': sections['Methodology'] || '',
+            'Questionnaire': '',
+            'Analysis': '',
+            'Draft': ''
+          } as any,
           references: [],
           status: 'Draft',
-          updatedAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-          sourceFile: {
-            name: file.name,
-            type: file.type,
-            data: URL.createObjectURL(file)
-          }
+          updatedAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
         };
 
         setProjects(prev => [newProject, ...prev]);
@@ -62,9 +72,9 @@ const App: React.FC = () => {
         setIsModalOpen(false);
         setStep(AppStep.PROJECT_LIBRARY);
       };
-      reader.readAsText(file.slice(0, 10000)); // Sample start of file for context
+      reader.readAsText(file.slice(0, 15000));
     } catch (err) {
-      console.error("Upload failed", err);
+      console.error(err);
       setIsUploading(false);
     }
   }, []);
@@ -85,10 +95,13 @@ const App: React.FC = () => {
       methodology: pendingConfig.meth,
       sections: {
         'Abstract': '',
-        'Background': '',
-        'Literature Review': '',
-        'Methodology': '',
-        'References': ''
+        'BTHS': '',
+        'QE': '',
+        'Method': '',
+        'References': '',
+        'Questionnaire': '',
+        'Analysis': '',
+        'Draft': ''
       },
       references: [],
       status: 'Draft',
@@ -106,12 +119,12 @@ const App: React.FC = () => {
   }, []);
 
   const deleteProject = useCallback((id: string) => {
-    setProjects(prev => prev.filter(p => p.id !== id));
+    if (confirm("Delete manuscript?")) {
+      setProjects(prev => prev.filter(p => p.id !== id));
+    }
   }, []);
 
-  const goToLibrary = useCallback(() => {
-    setStep(AppStep.PROJECT_LIBRARY);
-  }, []);
+  const goToLibrary = useCallback(() => setStep(AppStep.PROJECT_LIBRARY), []);
 
   const updateSection = useCallback((section: ResearchSectionType, content: string) => {
     setProjects(prev => prev.map(p => {
@@ -153,9 +166,7 @@ const App: React.FC = () => {
       
       {step === AppStep.LANDING && <Landing onStart={openModal} />}
       {step === AppStep.CONFIG && <Config onComplete={handleConfigComplete} />}
-      {step === AppStep.TOPIC_ARCHITECT && (
-        <TopicArchitect onTopicFinalized={handleProjectCreated} />
-      )}
+      {step === AppStep.TOPIC_ARCHITECT && <TopicArchitect onTopicFinalized={handleProjectCreated} />}
       {step === AppStep.PROJECT_LIBRARY && (
         <ProjectLibrary 
           projects={projects} 
