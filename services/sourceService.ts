@@ -73,3 +73,24 @@ export const formatCitation = (paper: Paper, style: CitationStyle): string => {
       return `${authorsStr}. ${paper.title}. ${paper.year}.`;
   }
 };
+
+export const formatInTextCitation = (paper: Paper, style: CitationStyle, index: number = 1): string => {
+  // Extract last name from the first author
+  const firstAuthor = paper.authors[0] || "Unknown";
+  const lastName = firstAuthor.includes(',') 
+    ? firstAuthor.split(',')[0].trim() 
+    : firstAuthor.split(' ').pop() || "Author";
+
+  switch (style) {
+    case CitationStyle.APA:
+      return `(${lastName}, ${paper.year})`;
+    case CitationStyle.MLA:
+      return `(${lastName})`;
+    case CitationStyle.IEEE:
+      return `[${index}]`;
+    case CitationStyle.CHICAGO:
+      return `(${lastName} ${paper.year})`;
+    default:
+      return `(${lastName}, ${paper.year})`;
+  }
+};

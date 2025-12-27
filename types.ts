@@ -15,6 +15,13 @@ export type ResearchSectionType = 'Abstract' | 'BTHS' | 'QE' | 'Method' | 'Refer
 
 export type ProjectStatus = 'Draft' | 'Published' | 'Archived';
 
+export interface Question {
+  id: string;
+  type: 'multiple-choice' | 'text' | 'rating';
+  label: string;
+  options?: string[];
+}
+
 export interface Project {
   id: string;
   title: string;
@@ -22,6 +29,7 @@ export interface Project {
   citationStyle: CitationStyle;
   methodology: Methodology;
   sections: Record<ResearchSectionType, string>;
+  questions: Question[]; // Added for the Form Builder
   references: Paper[];
   status: ProjectStatus;
   updatedAt: string;

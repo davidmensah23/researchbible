@@ -8,6 +8,8 @@ import ProjectLibrary from './components/ProjectLibrary';
 import Dashboard from './components/Dashboard';
 import NewProjectModal from './components/NewProjectModal';
 import { ingestManuscript } from './services/geminiService';
+// @ts-ignore
+import mammoth from 'mammoth';
 
 const STORAGE_KEY = 'scholarflow_projects';
 
@@ -42,40 +44,55 @@ const App: React.FC = () => {
   const handleUpload = useCallback(async (file: File) => {
     setIsUploading(true);
     try {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const text = (e.target?.result as string) || "";
-        const sections = await ingestManuscript(text);
-        
-        const newProject: Project = {
-          id: Math.random().toString(36).substr(2, 9),
-          title: file.name.replace(/\.[^/.]+$/, ""),
-          theme: "Uploaded: " + file.name,
-          citationStyle: CitationStyle.APA,
-          methodology: Methodology.QUALITATIVE,
-          sections: {
-            ...sections,
-            'BTHS': sections['Background'] || '',
-            'QE': '',
-            'Method': sections['Methodology'] || '',
-            'Questionnaire': '',
-            'Analysis': '',
-            'Draft': ''
-          } as any,
-          references: [],
-          status: 'Draft',
-          updatedAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-        };
+      const arrayBuffer = await file.arrayBuffer();
+      let htmlContent = "";
 
-        setProjects(prev => [newProject, ...prev]);
-        setIsUploading(false);
-        setIsModalOpen(false);
-        setStep(AppStep.PROJECT_LIBRARY);
+      if (file.name.endsWith('.docx')) {
+        // Convert Word to HTML preserving formatting
+        const result = await mammoth.convertToHtml({ arrayBuffer });
+        htmlContent = result.value;
+      } else {
+        // Fallback for simple text files or others
+        const reader = new FileReader();
+        htmlContent = await new Promise((resolve) => {
+          reader.onload = (e) => resolve(e.target?.result as string || "");
+          reader.readAsText(file);
+        });
+      }
+
+      // Pass formatted HTML to Gemini for section extraction
+      const sections = await ingestManuscript(htmlContent);
+      
+      const newProject: Project = {
+        id: Math.random().toString(36).substr(2, 9),
+        title: file.name.replace(/\.[^/.]+$/, ""),
+        theme: "Uploaded: " + file.name,
+        citationStyle: CitationStyle.APA,
+        methodology: Methodology.QUALITATIVE,
+        sections: {
+          'Abstract': sections['Abstract'] || '',
+          'BTHS': sections['Background'] || '',
+          'QE': '',
+          'Method': sections['Methodology'] || '',
+          'References': sections['References'] || '',
+          'Questionnaire': '',
+          'Analysis': '',
+          'Draft': htmlContent // Store the full original HTML in Draft as a master copy
+        } as any,
+        questions: [],
+        references: [],
+        status: 'Draft',
+        updatedAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
       };
-      reader.readAsText(file.slice(0, 15000));
-    } catch (err) {
-      console.error(err);
+
+      setProjects(prev => [newProject, ...prev]);
       setIsUploading(false);
+      setIsModalOpen(false);
+      setStep(AppStep.PROJECT_LIBRARY);
+    } catch (err) {
+      console.error("Upload failed", err);
+      setIsUploading(false);
+      alert("Failed to process manuscript. Please ensure it is a valid .docx file.");
     }
   }, []);
 
@@ -103,6 +120,7 @@ const App: React.FC = () => {
         'Analysis': '',
         'Draft': ''
       },
+      questions: [],
       references: [],
       status: 'Draft',
       updatedAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })

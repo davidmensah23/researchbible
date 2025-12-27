@@ -2,7 +2,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Methodology, ResearchSectionType } from "../types";
 
-// Fix: Initializing GoogleGenAI with process.env.API_KEY directly as per SDK guidelines.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const suggestTopics = async (theme: string): Promise<string[]> => {
@@ -33,49 +32,54 @@ export const generateBackground = async (topic: string, methodology: Methodology
     model: 'gemini-3-flash-preview',
     contents: `Write a professional "Background of the Study" section for a research project titled "${topic}". 
     The methodology used is ${methodology}. 
-    Structure the response with academic depth, discussing general context, the problem, and current trends in the field. 
-    Keep it around 400 words. Do not use markdown headers, just paragraphs.`,
+    Structure the response with academic depth. 
+    Format with simple <p> tags only.`,
   });
 
   return response.text || "";
 };
 
-// Fix: Changed return type to Record<string, string> to resolve the type error where 
-// 'Background', 'Literature Review', and 'Methodology' are not members of ResearchSectionType.
-export const ingestManuscript = async (rawContent: string): Promise<Record<string, string>> => {
+export const generateQuestionnaireJSON = async (topic: string, methodology: Methodology): Promise<any[]> => {
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `I have a research manuscript with the following content: "${rawContent.substring(0, 10000)}". 
-    Please extract and categorize the content into the following sections: Abstract, Background, Literature Review, Methodology, and References. 
-    Format the output as a JSON object where keys are the section names exactly.`,
+    contents: `Create a professional research instrument for: "${topic}". 
+    Methodology: ${methodology}. 
+    Return exactly 8 items as a JSON array of objects with fields: 
+    id (unique string), type (one of: multiple-choice, text, rating), label (the question), and options (array of strings, only for multiple-choice).`,
     config: {
       responseMimeType: "application/json",
       responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          'Abstract': { type: Type.STRING },
-          'Background': { type: Type.STRING },
-          'Literature Review': { type: Type.STRING },
-          'Methodology': { type: Type.STRING },
-          'References': { type: Type.STRING },
-        },
-        required: ['Abstract', 'Background', 'Literature Review', 'Methodology', 'References']
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            id: { type: Type.STRING },
+            type: { type: Type.STRING },
+            label: { type: Type.STRING },
+            options: { type: Type.ARRAY, items: { type: Type.STRING } }
+          },
+          required: ['id', 'type', 'label']
+        }
       }
     }
   });
 
   try {
-    return JSON.parse(response.text || '{}');
+    return JSON.parse(response.text || '[]');
   } catch (e) {
-    console.error("Failed to ingest manuscript", e);
-    return {
-      'Abstract': '',
-      'Background': '',
-      'Literature Review': '',
-      'Methodology': '',
-      'References': ''
-    };
+    console.error("Failed to parse questionnaire", e);
+    return [];
   }
+};
+
+export const generateAnalysis = async (topic: string, methodology: Methodology): Promise<string> => {
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: `Draft a "Data Analysis Plan" for: "${topic}". 
+    Methodology: ${methodology}. 
+    Format with HTML tags like <h3> and <p>.`,
+  });
+  return response.text || "";
 };
 
 export interface GroundedSource {
@@ -89,9 +93,7 @@ export interface GroundedSource {
 export const searchAcademicSources = async (query: string): Promise<GroundedSource[]> => {
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `Search for real, recent academic papers, journals, and scholarly articles related to the topic: "${query}". 
-    For each paper, provide: Title, Main Authors, Publication Year, and a 2-sentence Summary.
-    Include reputable sources like Google Scholar, ResearchGate, or ScienceDirect if possible.
+    contents: `Search for real academic papers related to: "${query}". 
     Format your response as a JSON array of objects.`,
     config: {
       tools: [{ googleSearch: {} }],
@@ -113,26 +115,61 @@ export const searchAcademicSources = async (query: string): Promise<GroundedSour
   });
 
   const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-  const sourcesText = response.text || '[]';
-  
   try {
-    const parsedSources = JSON.parse(sourcesText);
+    const parsedSources = JSON.parse(response.text || '[]');
     return parsedSources.map((source: any, index: number) => ({
       ...source,
-      uri: groundingChunks[index]?.web?.uri || groundingChunks[0]?.web?.uri || 'https://scholar.google.com'
+      uri: groundingChunks[index]?.web?.uri || 'https://scholar.google.com'
     }));
   } catch (e) {
-    console.error("Failed to parse grounded sources", e);
     return [];
   }
 };
 
 export const analyzeContextForSuggestions = async (content: string): Promise<string> => {
-  if (!content.trim()) return "";
+  if (!content.trim() || content.length < 50) return "";
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `Based on this manuscript fragment, suggest a specific academic search query that would find the most relevant supporting evidence or counter-arguments: "${content.substring(0, 1000)}". 
-    Return ONLY the search query string, nothing else.`,
+    contents: `Suggest a specific academic search query for: "${content.substring(0, 500)}". 
+    Return ONLY the search query string.`,
   });
   return response.text?.trim() || "";
+};
+
+export const ingestManuscript = async (htmlContent: string): Promise<Record<string, string>> => {
+  // Use gemini-3-pro-preview for complex manuscript parsing tasks
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-pro-preview',
+    contents: `I will provide you with the HTML content of a research paper. 
+    Please identify and extract the HTML blocks corresponding to these sections: Abstract, Background, Methodology, References. 
+    You MUST preserve all internal HTML tags (b, i, u, p, h1, h2, ul, li, etc.) within those blocks so formatting is not lost. 
+    If a section is missing, return an empty string for it.
+    
+    Content: 
+    ${htmlContent.substring(0, 10000)}`,
+    config: { 
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          Abstract: { type: Type.STRING },
+          Background: { type: Type.STRING },
+          Methodology: { type: Type.STRING },
+          References: { type: Type.STRING }
+        }
+      }
+    }
+  });
+  
+  try {
+    return JSON.parse(response.text || '{}');
+  } catch (e) {
+    console.error("Failed to parse manuscript extraction", e);
+    return {
+      Abstract: htmlContent.substring(0, 2000),
+      Background: '',
+      Methodology: '',
+      References: ''
+    };
+  }
 };
