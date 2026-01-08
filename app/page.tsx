@@ -1,12 +1,8 @@
-
 import React from 'react';
 import { GraduationCap, Sparkles, ArrowRight } from 'lucide-react';
+import Link from 'next/link';
 
-interface LandingProps {
-  onStart: () => void;
-}
-
-const Landing: React.FC<LandingProps> = ({ onStart }) => {
+export default function Home() {
   return (
     <div className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden bg-white">
       {/* Background Decor */}
@@ -34,24 +30,24 @@ const Landing: React.FC<LandingProps> = ({ onStart }) => {
           <Sparkles className="w-3.5 h-3.5 text-blue-500" />
           The future of student research orchestration
         </div>
-        
+
         <h1 className="heading-premium text-6xl md:text-8xl text-slate-900 leading-[0.95] mb-8">
-          Master your <br /> 
+          Master your <br />
           <span className="font-editorial text-blue-600 px-2 italic">academic</span> flow
         </h1>
-        
+
         <p className="text-lg text-slate-500 mb-12 max-w-xl mx-auto leading-relaxed font-light">
           An orchestrated workspace for modern researchers. From <span className="font-editorial text-slate-800 italic text-xl">AI-driven</span> topics to real-time manuscript automation.
         </p>
-        
+
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <button 
-            onClick={onStart}
+          <Link
+            href="/auth"
             className="group bg-slate-900 hover:bg-blue-600 text-white px-8 py-4 rounded-full font-bold text-sm tracking-wide transition-all duration-300 shadow-2xl shadow-slate-200 hover:shadow-blue-200 flex items-center gap-3"
           >
             Create New Project
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-          </button>
+          </Link>
           <button className="px-8 py-4 rounded-full font-bold text-sm text-slate-500 hover:text-slate-900 transition-colors">
             View Live Demo
           </button>
@@ -77,6 +73,4 @@ const Landing: React.FC<LandingProps> = ({ onStart }) => {
       </main>
     </div>
   );
-};
-
-export default Landing;
+}
