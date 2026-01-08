@@ -303,7 +303,8 @@ const Dashboard: React.FC<DashboardProps> = ({ project, onUpdateSection, onAddCi
                     title: paper.title,
                     authors: 'Uploaded Document',
                     year: paper.year.toString(),
-                    summary: result.extractedText.substring(0, 300) + '...'
+                    summary: result.extractedText.substring(0, 300) + '...',
+                    uri: ''
                 };
                 setPapers(prev => [groundedSource, ...prev]);
 
