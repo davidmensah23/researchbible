@@ -51,7 +51,7 @@ A Next.js-powered platform for academic research collaboration, combining manusc
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
+git clone https://github.com/davidmensah23/researchbible.git
 cd researchbible
 ```
 
