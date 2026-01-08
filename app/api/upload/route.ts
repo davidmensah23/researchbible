@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import mammoth from 'mammoth';
-import pdf from 'pdf-parse';
 
 export async function POST(req: NextRequest) {
     console.log("Upload request received");
@@ -44,13 +43,9 @@ export async function POST(req: NextRequest) {
         const buffer = Buffer.from(arrayBuffer);
 
         if (file.type === "application/pdf") {
-            try {
-                const data = await pdf(buffer);
-                extractedText = data.text;
-            } catch (e) {
-                console.error("PDF Parse Error", e);
-                extractedText = "Error parsing PDF content.";
-            }
+            // For PDFs in serverless, we'll provide a placeholder
+            // Users can still upload PDFs, but text extraction is limited
+            extractedText = `PDF Document: ${file.name}\n\nNote: Full PDF text extraction is not available in the current deployment. The document has been uploaded successfully and can be downloaded for reference.`;
         } else if (file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
             try {
                 const result = await mammoth.extractRawText({ buffer: buffer });
@@ -61,11 +56,14 @@ export async function POST(req: NextRequest) {
             }
         } else {
             // Text file fallback
-            extractedText = buffer.toString('utf-8');
+            try {
+                extractedText = buffer.toString('utf-8');
+            } catch (e) {
+                extractedText = `File uploaded: ${file.name}`;
+            }
         }
 
-        // Limit text length to avoid DB overflow (e.g., 30k chars ~ 5000 tokens)
-        // Adjust based on your JSONB limits or use a separate content table
+        // Limit text length to avoid DB overflow
         const TRUNCATE_LIMIT = 50000;
         if (extractedText.length > TRUNCATE_LIMIT) {
             extractedText = extractedText.substring(0, TRUNCATE_LIMIT) + "... [Truncated]";
